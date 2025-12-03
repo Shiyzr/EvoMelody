@@ -9,8 +9,8 @@ class Note:
     def __init__(self, octave: int, pitch: int, duration: int):
         """
         octave: 八度，范围3-5
-        pitch: 音高(0-11)，0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
-        duration: 持续时间(八分音符为单位)，1=八分音符, 2=四分音符, 4=二分音符
+        pitch: 音高(0-12)，0=休止，1-12表示C到B（1=C, 12=B）
+        duration: 持续时间(八分音符为单位)，1=八分音符, 2=四分音符, 4=二分音符, 8=全音符
         """
         self.octave = octave
         self.pitch = pitch
@@ -18,13 +18,19 @@ class Note:
     
     def __repr__(self):
         pitch_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        return f"{pitch_names[self.pitch]}{self.octave}({self.duration})"
+        if self.pitch == 0:
+            return f"R({self.duration})"
+        idx = max(1, min(12, self.pitch)) - 1
+        return f"{pitch_names[idx]}{self.octave}({self.duration})"
     
     def to_music21_note(self):
-        """转换为music21的Note对象"""
-        pitch_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        pitch_str = f"{pitch_names[self.pitch]}{self.octave}"
+        """转换为music21的Note/Rest对象"""
         duration_value = self.duration * 0.5
+        if self.pitch == 0:
+            return note.Rest(quarterLength=duration_value)
+        pitch_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        idx = max(1, min(12, self.pitch)) - 1
+        pitch_str = f"{pitch_names[idx]}{self.octave}"
         return note.Note(pitch_str, quarterLength=duration_value)
     
     def copy(self):
