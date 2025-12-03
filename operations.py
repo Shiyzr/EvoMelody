@@ -4,30 +4,33 @@ from typing import List, Tuple
 from models import Melody, Note
 
 
-def generate_random_melody(bars: int = 4) -> Melody:
+def generate_random_melody(bars: int = 4, rest_probability: float = 0.15) -> Melody:
     """
     随机生成一个旋律
     bars: 小节数
     """
     available_pitches = []
-    for pitch in range(5, 12):
+    for pitch in range(6, 13):
         available_pitches.append((3, pitch))
-    for pitch in range(0, 12):
+    for pitch in range(1, 13):
         available_pitches.append((4, pitch))
-    for pitch in range(0, 8):
+    for pitch in range(1, 9):
         available_pitches.append((5, pitch))
     target_duration = bars * 8 * 4
     notes = []
     current_duration = 0
     durations = [1, 2, 4, 8]
     while current_duration < target_duration:
-        octave, pitch = random.choice(available_pitches)
         remaining = target_duration - current_duration
         valid_durations = [d for d in durations if d <= remaining]
         if not valid_durations:
             valid_durations = [1]
         duration = random.choice(valid_durations)
-        notes.append(Note(octave, pitch, duration))
+        if random.random() < rest_probability:
+            notes.append(Note(4, 0, duration))
+        else:
+            octave, pitch = random.choice(available_pitches)
+            notes.append(Note(octave, pitch, duration))
         current_duration += duration
     return Melody(notes)
 
@@ -62,8 +65,12 @@ def mutate(melody: Melody, mutation_rate: float = 0.2) -> Melody:
             mutation_type = random.choice(['pitch', 'octave', 'duration'])
             if mutation_type == 'pitch':
                 delta = random.randint(-2, 2)
-                new_pitch = (n.pitch + delta) % 12
-                n.pitch = new_pitch
+                if n.pitch == 0:
+                    n.pitch = random.randint(1, 12)
+                else:
+                    base = n.pitch - 1
+                    new_pitch_index = (base + delta) % 12
+                    n.pitch = new_pitch_index + 1
             elif mutation_type == 'octave':
                 delta = random.choice([-1, 1])
                 new_octave = n.octave + delta
@@ -78,9 +85,13 @@ def mutate(melody: Melody, mutation_rate: float = 0.2) -> Melody:
 def transpose(melody: Melody, semitones: int) -> Melody:
     transposed = melody.copy()
     for n in transposed.notes:
-        total_pitch = n.octave * 12 + n.pitch + semitones
+        if n.pitch == 0:
+            continue
+        base = n.pitch - 1
+        total_pitch = n.octave * 12 + base + semitones
         n.octave = total_pitch // 12
-        n.pitch = total_pitch % 12
+        new_class = total_pitch % 12
+        n.pitch = new_class + 1
         if n.octave < 3:
             n.octave = 3
         elif n.octave > 5:
@@ -92,16 +103,26 @@ def inversion(melody: Melody) -> Melody:
     if not melody.notes:
         return melody.copy()
     inverted = melody.copy()
-    first_note = melody.notes[0]
-    axis = first_note.octave * 12 + first_note.pitch
+    first_note = None
+    for n in melody.notes:
+        if n.pitch != 0:
+            first_note = n
+            break
+    if first_note is None:
+        return inverted
+    axis = first_note.octave * 12 + (first_note.pitch - 1)
     for i, n in enumerate(inverted.notes):
         if i == 0:
             continue
-        original_pitch = melody.notes[i].octave * 12 + melody.notes[i].pitch
+        src = melody.notes[i]
+        if src.pitch == 0:
+            n.pitch = 0
+            continue
+        original_pitch = src.octave * 12 + (src.pitch - 1)
         interval = original_pitch - axis
         new_pitch = axis - interval
         n.octave = new_pitch // 12
-        n.pitch = new_pitch % 12
+        n.pitch = (new_pitch % 12) + 1
         if n.octave < 3:
             n.octave = 3
         elif n.octave > 5:
@@ -122,10 +143,10 @@ def _adjust_melody_length(melody: Melody, target: int = 32) -> Melody:
     if current < target:
         available_pitches = []
         for octave in range(3, 6):
-            for pitch in range(12):
-                if octave == 3 and pitch < 5:
+            for pitch in range(1, 13):
+                if octave == 3 and pitch < 6:
                     continue
-                if octave == 5 and pitch > 7:
+                if octave == 5 and pitch > 8:
                     continue
                 available_pitches.append((octave, pitch))
         while adjusted.total_duration() < target:
