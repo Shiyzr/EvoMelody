@@ -1,16 +1,16 @@
 from typing import List
-from music21 import stream, note, meter, tempo
+ 
 
 
 class Note:
     """
     音符类：用三个参数刻画一个音符
     """
-    def __init__(self, octave: int, pitch: int, duration: int):
+    def __init__(self, octave: int, pitch: int, duration: float):
         """
         octave: 八度，范围3-5
         pitch: 音高(0-12)，0=休止，1-12表示C到B（1=C, 12=B）
-        duration: 持续时间(八分音符为单位)，1=八分音符, 2=四分音符, 4=二分音符, 8=全音符
+        duration: 持续时间(四分音符为单位)，0.5=八分音符, 1=四分音符, 2=二分音符, 4=全音符
         """
         self.octave = octave
         self.pitch = pitch
@@ -25,7 +25,8 @@ class Note:
     
     def to_music21_note(self):
         """转换为music21的Note/Rest对象"""
-        duration_value = self.duration * 0.5
+        from music21 import note
+        duration_value = self.duration
         if self.pitch == 0:
             return note.Rest(quarterLength=duration_value)
         pitch_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -55,6 +56,7 @@ class Melody:
         return Melody([n.copy() for n in self.notes])
     
     def to_music21_stream(self):
+        from music21 import stream, meter, tempo
         s = stream.Stream()
         s.append(meter.TimeSignature('4/4'))
         s.append(tempo.MetronomeMark(number=120))
