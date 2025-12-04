@@ -16,10 +16,10 @@ def generate_random_melody(bars: int = 4, rest_probability: float = 0.15) -> Mel
         available_pitches.append((4, pitch))
     for pitch in range(1, 9):
         available_pitches.append((5, pitch))
-    target_duration = bars * 8 * 4
+    target_duration = bars * 4
     notes = []
     current_duration = 0
-    durations = [1, 2, 4, 8]
+    durations = [0.5, 1, 2, 4]
     while current_duration < target_duration:
         remaining = target_duration - current_duration
         valid_durations = [d for d in durations if d <= remaining]
@@ -76,7 +76,7 @@ def mutate(melody: Melody, mutation_rate: float = 0.2) -> Melody:
                 new_octave = n.octave + delta
                 n.octave = max(3, min(5, new_octave))
             elif mutation_type == 'duration':
-                durations = [1, 2, 4, 8]
+                durations = [0.5, 1, 2, 4]
                 n.duration = random.choice(durations)
     mutated = _adjust_melody_length(mutated)
     return mutated
@@ -135,7 +135,7 @@ def retrograde(melody: Melody) -> Melody:
     return Melody([n.copy() for n in reversed_notes])
 
 
-def _adjust_melody_length(melody: Melody, target: int = 32) -> Melody:
+def _adjust_melody_length(melody: Melody, target: int = 16) -> Melody:
     current = melody.total_duration()
     if current == target:
         return melody
@@ -151,7 +151,7 @@ def _adjust_melody_length(melody: Melody, target: int = 32) -> Melody:
                 available_pitches.append((octave, pitch))
         while adjusted.total_duration() < target:
             remaining = target - adjusted.total_duration()
-            durations = [1, 2, 4, 8]
+            durations = [0.5, 1, 2, 4]
             valid_durations = [d for d in durations if d <= remaining]
             if not valid_durations:
                 break
