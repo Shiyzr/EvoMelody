@@ -1,4 +1,6 @@
 import random
+import json
+import os
 from typing import List, Tuple
 
 from models import Melody, Note
@@ -36,10 +38,25 @@ def generate_random_melody(bars: int = 4, rest_probability: float = 0.15) -> Mel
 
 
 def generate_initial_population(size: int = 15) -> List[Melody]:
-    population = []
-    for i in range(size):
-        melody = generate_random_melody()
-        population.append(melody)
+    path = os.path.join('input', 'initial_population.json')
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    loaded: List[Melody] = []
+    for item in data:
+        notes = [Note(int(n[0]), int(n[1]), float(n[2])) for n in item.get('notes', [])]
+        melody = Melody(notes)
+        # print(f"原始旋律长度: {melody.total_duration()}")
+        # from io_utils import save_melody_as_midi
+        # save_melody_as_midi(melody, f"output/initial_population/{item['name']}.mid")
+        melody = _adjust_melody_length(melody)
+        loaded.append(melody)
+    if size is None or size <= 0:
+        return loaded
+    if len(loaded) >= size:
+        return loaded[:size]
+    population = list(loaded)
+    while len(population) < size and loaded:
+        population.append(random.choice(loaded).copy())
     return population
 
 
