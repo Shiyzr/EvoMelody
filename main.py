@@ -24,7 +24,7 @@ def main():
     best_melody = ga.get_best_melody()
     print(f"\n最佳旋律适应度: {best_melody.fitness:.2f}")
     print(f"音符数量: {len(best_melody.notes)}")
-    print(f"总时长: {best_melody.total_duration()} 个八分音符")
+    print(f"总时长: {best_melody.total_duration()} 个四分音符")
     print("\n正在保存结果...")
     output_dir = os.path.join(os.getcwd(), 'outputs')
     os.makedirs(output_dir, exist_ok=True)
