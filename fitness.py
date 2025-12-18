@@ -12,19 +12,19 @@ class FitnessEvaluator:
     def __init__(self):
         # 定义各项评分指标的权重
         self.weights = {
-            'range': 1.0,               # 音域范围权重
+            'range': 1.0,               # 音高多样性权重
             'large_leap': 1.5,          # 大跳音程权重（避免过度大跳）
-            'prefer_pentatonic': 1.2,   # 五声音阶偏好权重
+            'prefer_pentatonic': 1.2,   # 音阶偏好权重
             'rhythm_variety': 1.0,      # 节奏变化权重
             'motif_repetition': 2.0,    # 动机重复权重
             'stable_ending': 1.5,       # 稳定结尾权重
             'avoid_continuous_repeat': 1.0, # 避免连续重复音权重
             'harmony': 1.0,             # 和声暗示权重
-            'pitch_variety': 1.0,       # 音高变化权重
-            'tonality': 1.5,            # 调性权重
+            'note_density': 1.0,        # 音符密度权重
+            'beat_alignment': 0.9,      # 重音与节拍对齐权重
             'pitch_distribution': 1.2,  # 音高分布权重
             'smoothness': 1.3,          # 旋律平滑度权重
-            'large_leap_count': 1.0,    # 大跳次数权重
+            'very_large_leap': 1.0,    # 超大跳次数权重
         }
     
     def evaluate(self, melody: Melody) -> float:
@@ -43,9 +43,11 @@ class FitnessEvaluator:
         scores['stable_ending'] = self._evaluate_stable_ending(melody)
         scores['avoid_continuous_repeat'] = self._evaluate_continuous_repeat(melody)
         scores['harmony'] = self._evaluate_harmony_hint(melody)
+        scores['note_density'] = self._evaluate_note_density(melody)
+        scores['beat_alignment'] = self._evaluate_beat_alignment(melody)
         scores['pitch_distribution'] = self._evaluate_pitch_distribution(melody)
         scores['smoothness'] = self._evaluate_smoothness(melody)
-        scores['large_leap_count'] = self._evaluate_large_leap_count(melody)
+        scores['very_large_leap'] = self._evaluate_very_large_leap(melody)
         
         # 根据权重计算总分
         total_score = sum(scores[key] * self.weights[key] for key in scores)
@@ -53,7 +55,7 @@ class FitnessEvaluator:
     
     def _evaluate_range(self, melody: Melody) -> float:
         """
-        评估音域范围
+        评估音高多样性
         理想范围是8到15个不同的音高
         """
         pitches = set((n.octave, n.pitch) for n in melody.notes)
@@ -268,18 +270,110 @@ class FitnessEvaluator:
         else:
             return 6.0
     
-    def _evaluate_large_leap_count(self, melody: Melody) -> float:
+    def _evaluate_very_large_leap(self, melody: Melody) -> float:
         """
-        评估大跳次数
+        评估超大跳次数
         惩罚超过一个八度（12个半音）的极大跳进
         """
         if len(melody.notes) < 2:
             return 10.0
-        large_leaps = 0
+        very_large_leaps = 0
         for i in range(len(melody.notes) - 1):
             n1, n2 = melody.notes[i], melody.notes[i+1]
             interval = abs((n2.octave * 12 + n2.pitch) - (n1.octave * 12 + n1.pitch))
             if interval > 12:
-                large_leaps += 1
-        penalty = large_leaps * 3.0
+                very_large_leaps += 1
+        penalty = very_large_leaps * 3.0
         return max(0, 10.0 - penalty)
+
+    def _evaluate_note_density(self, melody: Melody) -> float:
+        """
+        评估音符密度
+        计算平均每小节的音符数量
+        理想范围是每小节 4 到 12 个音符
+        """
+        total_duration = melody.total_duration()
+        if total_duration == 0:
+            return 0.0
+        
+        # 假设4/4拍，一个小节4拍
+        num_measures = total_duration / 4.0
+        # 避免极短旋律导致的除零或异常，虽然total_duration!=0已判断，但若极小比如0.1
+        if num_measures < 0.1:
+             return 0.0
+
+        density = len(melody.notes) / num_measures
+        
+        if 4 <= density <= 12:
+            return 10.0
+        elif density < 4:
+            return density * 2.5
+        else:
+            return max(0, 10.0 - (density - 12) * 1.0)
+
+    def _evaluate_beat_alignment(self, melody: Melody) -> float:
+        """
+        评估重音与节拍对齐
+        鼓励音符落在强拍（第1、3拍）或正拍上
+        惩罚过度的切分节奏（连续偏离拍点）
+        """
+        if not melody.notes:
+            return 0.0
+
+        current_time = 0.0
+        on_beat_score = 0.0
+        consecutive_off_beat = 0
+        syncopation_penalty = 0.0
+        
+        # 4/4拍，每拍1.0
+        for note in melody.notes:
+            # 计算当前音符起始位置在小节内的位置 (0.0 - 4.0)
+            measure_pos = current_time % 4.0
+            
+            # 判断是否在拍点上 (允许微小误差)
+            # 强拍: 0.0 (第1拍), 2.0 (第3拍)
+            # 弱拍: 1.0 (第2拍), 3.0 (第4拍)
+            
+            is_strong_beat = False
+            is_weak_beat = False
+            
+            # 检查是否接近整数拍
+            dist_to_beat = min(abs(measure_pos - round(measure_pos)), abs(measure_pos - round(measure_pos) - 4.0))
+            
+            if dist_to_beat < 0.05: # 认为是在正拍上
+                beat_idx = round(measure_pos) % 4
+                if beat_idx == 0 or beat_idx == 2:
+                    is_strong_beat = True
+                else:
+                    is_weak_beat = True
+            
+            if is_strong_beat:
+                on_beat_score += 2.0
+                consecutive_off_beat = 0
+            elif is_weak_beat:
+                on_beat_score += 1.0
+                consecutive_off_beat = 0
+            else:
+                # 切分/Off-beat
+                consecutive_off_beat += 1
+                # 如果连续切分超过2个音符，开始惩罚
+                if consecutive_off_beat > 2:
+                    syncopation_penalty += (consecutive_off_beat - 2) * 1.0
+            
+            current_time += note.duration
+            
+        # 归一化得分
+        # 理论最高分估算：假设所有音符都在强拍（不可能，但作为分母参考），或者平均每个音符得1.5分
+        # 这里用一种相对比例：得分 / (音符数 * 1.5) * 10
+        # 或者简单点：计算平均得分
+        
+        avg_score = on_beat_score / len(melody.notes)
+        # avg_score 范围大约在 0 到 2 之间
+        # 映射到 0-10
+        
+        base_score = (avg_score / 2.0) * 10.0
+        
+        final_score = base_score - syncopation_penalty
+        return max(0.0, min(10.0, final_score))
+
+
