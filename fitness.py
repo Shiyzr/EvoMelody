@@ -163,20 +163,56 @@ class FitnessEvaluator:
     
     def _evaluate_stable_ending(self, melody: Melody) -> float:
         """
-        评估结尾稳定性
-        检查最后一个音是否为主音或属音
+        评估结尾稳定性（修正版）
+        先估计旋律的主音(root)，再判断最后一个音是否落在主音/属音等稳定音上
         """
         if not melody.notes:
-            return 0
-        last_note = melody.notes[-1]
+            return 0.0
+
+        major_scale = {0, 2, 4, 5, 7, 9, 11}
+        pentatonic_scale = {0, 2, 4, 7, 9}
+
+        # 1) 估计最可能的 root：选择“调内覆盖率”最高的 root
+        best_root = 0
+        best_score = -1.0
+        n = len(melody.notes)
+
         for root in range(12):
-            tonic = root
-            dominant = (root + 7) % 12
-            if last_note.pitch == tonic:
-                return 10.0
-            elif last_note.pitch == dominant:
-                return 8.0
+            major_transposed = {(p + root) % 12 for p in major_scale}
+            pent_transposed = {(p + root) % 12 for p in pentatonic_scale}
+
+            major_count = sum(1 for note in melody.notes if note.pitch in major_transposed)
+            pent_count = sum(1 for note in melody.notes if note.pitch in pent_transposed)
+
+            major_ratio = major_count / n
+            pent_ratio = pent_count / n
+
+            # 五声音阶略微偏好（可调），但不让它“碾压”大调
+            score = max(major_ratio, 1.05 * pent_ratio)
+
+            # 可选：让“主音出现次数”作为轻微 tie-breaker
+            tonic_bonus = sum(1 for note in melody.notes if note.pitch == root) / n
+            score += 0.02 * tonic_bonus
+
+            if score > best_score:
+                best_score = score
+                best_root = root
+
+        # 2) 用估计出的 root 判断结尾稳定性
+        last_pitch = melody.notes[-1].pitch
+        tonic = best_root
+        dominant = (best_root + 7) % 12
+        mediant_major = (best_root + 4) % 12  # 大三度（大调稳定音）
+        mediant_minor = (best_root + 3) % 12  # 小三度（小调稳定音）
+
+        if last_pitch == tonic:
+            return 10.0
+        if last_pitch == dominant:
+            return 8.0
+        if last_pitch == mediant_major or last_pitch == mediant_minor:
+            return 6.5
         return 5.0
+
     
     def _evaluate_continuous_repeat(self, melody: Melody) -> float:
         """
@@ -200,8 +236,12 @@ class FitnessEvaluator:
         """
         if len(melody.notes) < 3:
             return 5.0
-        pitches = [(n.octave * 12 + n.pitch) for n in melody.notes]
-        pitch_set = set([p % 12 for p in pitches])
+        # 转换为 0-based pitch class，忽略休止符
+        pitches = [(n.pitch - 1) % 12 for n in melody.notes if n.pitch > 0]
+        if not pitches:
+            return 5.0
+            
+        pitch_set = set(pitches)
         max_score = 0
         for root in range(12):
             major_chord = {root, (root + 4) % 12, (root + 7) % 12}
@@ -223,9 +263,14 @@ class FitnessEvaluator:
         使用信息熵来衡量音高分布的均匀程度
         """
         from collections import Counter
-        pitches = [n.pitch for n in melody.notes]
+        # 转换为 0-based pitch class，忽略休止符
+        pitches = [(n.pitch - 1) % 12 for n in melody.notes if n.pitch > 0]
+        if not pitches:
+            return 5.0
+            
         counter = Counter(pitches)
         total = len(pitches)
+        # range(12) 覆盖 0-11
         probs = [counter[i] / total for i in range(12)]
         # 计算熵
         entropy = -sum(p * np.log2(p) if p > 0 else 0 for p in probs)
