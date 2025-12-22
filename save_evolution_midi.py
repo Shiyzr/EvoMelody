@@ -8,8 +8,8 @@ def main():
     print("Evolution of Melody - Saving MIDI files...")
     
     # Set seeds for reproducibility
-    random.seed(47)
-    np.random.seed(47)
+    random.seed(42)
+    np.random.seed(42)
     
     # Create output directory for evolution steps
     output_dir = os.path.join(os.getcwd(), 'outputs', 'evolution_demo')
